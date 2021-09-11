@@ -43,6 +43,7 @@ func ReadFileByLine() error {
 			return err
 		}
 	}
+	fmt.Printf("Вставлено всего записей в базу: %v", cnt)
 	return nil
 }
 
