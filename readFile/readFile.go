@@ -2,8 +2,10 @@ package readFile
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"github.com/Kuppuch/parser/dataBase"
+	"github.com/Kuppuch/parser/mongo"
 	"github.com/Kuppuch/parser/structs"
 	"io"
 	"os"
@@ -14,18 +16,19 @@ import (
 var Wrt = make(chan structs.Line)
 var Done = make(chan bool)
 
-func ReadFileByLine() error {
+func ReadFileByLinePostgres() error {
 	file, err := os.Open("parse.txt")
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 	fmt.Println(file.Name())
 
 	reader := bufio.NewReader(file)
 	cnt := 0
 	for {
 		cnt++
-		if cnt%1000 == 0 {
+		if cnt%100000 == 0 {
 			fmt.Println(cnt)
 		}
 		lineStr, _, err := reader.ReadLine()
@@ -38,16 +41,55 @@ func ReadFileByLine() error {
 		}
 
 		subLine := strings.Split(string(lineStr), ";")
-		err = LineParser(subLine)
+		line, err := LineParser(subLine)
+		if err != nil {
+			return err
+		}
+		dataBase.DB.Create(line)
+	}
+	fmt.Printf("Вставлено всего записей в базу: %v \n", cnt)
+	return nil
+}
+
+func ReadFileByLineMongo() error {
+	file, err := os.Open("parse.txt")
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	fmt.Println(file.Name())
+
+	reader := bufio.NewReader(file)
+	cnt := 0
+	for {
+		cnt++
+		if cnt%100000 == 0 {
+			fmt.Println(cnt)
+		}
+		lineStr, _, err := reader.ReadLine()
+		if err != nil {
+			if err == io.EOF {
+				break
+			} else {
+				return err
+			}
+		}
+
+		subLine := strings.Split(string(lineStr), ";")
+		line, err := LineParser(subLine)
+		if err != nil {
+			return err
+		}
+		_, err = mongo.Collection.InsertOne(context.Background(), line)
 		if err != nil {
 			return err
 		}
 	}
-	fmt.Printf("Вставлено всего записей в базу: %v", cnt)
+	fmt.Printf("Вставлено всего записей в базу: %v \n", cnt)
 	return nil
 }
 
-func LineParser(subLine []string) error {
+func LineParser(subLine []string) (*structs.Line, error) {
 	line := structs.Line{}
 	for _, v := range subLine {
 		// Парсим PersonalAccount
@@ -92,6 +134,5 @@ func LineParser(subLine []string) error {
 			continue
 		}
 	}
-	dataBase.DB.Create(&line)
-	return nil
+	return &line, nil
 }
